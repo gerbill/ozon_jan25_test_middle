@@ -25,6 +25,7 @@ func TestRun(t *testing.T) {
 		t.Run(file.Name(), func(t *testing.T) {
 			in := bufio.NewReader(file)
 			fileName := fmt.Sprintf("tests/%d.a", i)
+			t.Log(">>>>>>", fileName)
 			expected, err := os.ReadFile(fileName)
 			require.Nil(t, err)
 
