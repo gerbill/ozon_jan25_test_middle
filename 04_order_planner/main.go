@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"cmp"
 	"fmt"
 	"io"
@@ -19,6 +20,8 @@ func main() {
 	defer out.Flush()
 	Run(in, out)
 }
+
+var sortedTrucks []*Truck
 
 type OrderBatch struct {
 	ordersNum  int
@@ -58,34 +61,29 @@ func (ob *OrderBatch) fill(line string) {
 }
 
 func (ob *OrderBatch) report() string {
-	report := ""
+	var report bytes.Buffer
 	ts := time.Now().UnixNano()
-	sortedTrucks := ob.sortedTrucks()
+	sortedTrucks = ob.sortedTrucks()
 	fmt.Println("sort trucks", time.Now().UnixNano()-ts)
+	ts = time.Now().UnixNano()
 	sortedOrders := ob.sortedOrders()
 	fmt.Println("sort orders", time.Now().UnixNano()-ts)
+	ts = time.Now().UnixNano()
+	printTrucksStart()
+	printOrders(sortedOrders)
 	for _, order := range sortedOrders {
-		order.truckId = order.findTruck(sortedTrucks)
+		order.truckId = order.findTruck()
 	}
 	fmt.Println("find trucks for orders", time.Now().UnixNano()-ts)
+	ts = time.Now().UnixNano()
 	for _, order := range ob.orders2 {
-		report += fmt.Sprintf("%d ", order.truckId)
+		report.WriteString(strconv.Itoa(order.truckId) + " ")
 	}
 	fmt.Println("add to report", time.Now().UnixNano()-ts)
-	return report
+	return report.String()
 }
 
 func (ob *OrderBatch) sortedTrucks() []*Truck {
-	// sort.Slice(ob.trucks, func(i, j int) bool {
-	// 	if ob.trucks[i].start < ob.trucks[j].start {
-	// 		return true
-	// 	}
-	// 	if ob.trucks[i].start == ob.trucks[j].start && ob.trucks[i].id < ob.trucks[j].id {
-	// 		return true
-	// 	}
-	// 	return false
-	// })
-
 	slices.SortFunc(ob.trucks, func(a, b *Truck) int {
 		return cmp.Or(
 			cmp.Compare(a.start, b.start),
@@ -97,10 +95,6 @@ func (ob *OrderBatch) sortedTrucks() []*Truck {
 }
 
 func (ob *OrderBatch) sortedOrders() []*Order {
-	// sort.Slice(ob.orders, func(i, j int) bool {
-	// 	return ob.orders[i].arrival < ob.orders[j].arrival
-	// })
-
 	slices.SortFunc(ob.orders, func(a, b *Order) int {
 		return cmp.Or(
 			cmp.Compare(a.arrival, b.arrival),
@@ -109,27 +103,15 @@ func (ob *OrderBatch) sortedOrders() []*Order {
 	return ob.orders
 }
 
-func (ob *OrderBatch) printTrucks() {
-	slices.SortFunc(ob.trucks, func(a, b *Truck) int {
-		return cmp.Or(
-			cmp.Compare(a.id, b.id),
-		)
-	})
-	for _, truck := range ob.trucks {
-		fmt.Printf("%d %d %d %d ||", truck.id, truck.start, truck.end, truck.capacity)
-	}
-	fmt.Println("")
-}
-
 type Order struct {
 	id      int
 	arrival int
 	truckId int
 }
 
-func (o *Order) findTruck(trucks []*Truck) int {
-	for _, truck := range trucks {
-		if truck.canTakeOrder(o) {
+func (o *Order) findTruck() int {
+	for _, truck := range sortedTrucks {
+		if truck.canTakeOrder(o.arrival) {
 			return truck.id
 		}
 	}
@@ -151,11 +133,11 @@ type Truck struct {
 	orders   int
 }
 
-func (t *Truck) canTakeOrder(order *Order) bool {
-	if order.arrival < t.start {
+func (t *Truck) canTakeOrder(arrival int) bool {
+	if arrival < t.start {
 		return false
 	}
-	if order.arrival > t.end {
+	if arrival > t.end {
 		return false
 	}
 	if t.orders >= t.capacity {
@@ -218,4 +200,30 @@ func aToI(a string, message string) int {
 		log.Fatalf("failed to convert string '%s' to int. Error: %+v. Message: %s", a, err, message)
 	}
 	return i
+}
+
+func (ob *OrderBatch) printTrucks() {
+	slices.SortFunc(ob.trucks, func(a, b *Truck) int {
+		return cmp.Or(
+			cmp.Compare(a.id, b.id),
+		)
+	})
+	for _, truck := range ob.trucks {
+		fmt.Printf("%d %d %d %d ||", truck.id, truck.start, truck.end, truck.capacity)
+	}
+	fmt.Println("")
+}
+
+func printTrucksStart() {
+	for i, truck := range sortedTrucks {
+		fmt.Printf("%d:%d ||", i, truck.start)
+	}
+	fmt.Println("===============")
+}
+
+func printOrders(orders []*Order) {
+	for i, order := range orders {
+		fmt.Printf("order:%d:%d ||", i, order.arrival)
+	}
+	fmt.Println("===============")
 }
