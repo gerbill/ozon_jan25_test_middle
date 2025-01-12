@@ -218,12 +218,12 @@ func printTrucksStart() {
 	for i, truck := range sortedTrucks {
 		fmt.Printf("%d:%d ||", i, truck.start)
 	}
-	fmt.Println("===============")
+	fmt.Println("================")
 }
 
 func printOrders(orders []*Order) {
 	for i, order := range orders {
 		fmt.Printf("order:%d:%d ||", i, order.arrival)
 	}
-	fmt.Println("===============")
+	fmt.Println("================")
 }
