@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"cmp"
 	"fmt"
 	"io"
@@ -11,7 +10,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 )
 
 func main() {
@@ -22,6 +20,8 @@ func main() {
 }
 
 var sortedTrucks []*Truck
+var maxWindowDuration = 0
+var lastAvailableTruckId = 0
 
 type OrderBatch struct {
 	ordersNum  int
@@ -30,6 +30,20 @@ type OrderBatch struct {
 	trucksNum  int
 	trucks     []*Truck
 	isComplete bool
+}
+
+type Truck struct {
+	id       int
+	start    int
+	end      int
+	capacity int
+	orders   int
+}
+
+type Order struct {
+	id      int
+	arrival int
+	truckId int
 }
 
 func (ob *OrderBatch) fill(line string) {
@@ -56,107 +70,9 @@ func (ob *OrderBatch) fill(line string) {
 	}
 	if len(ob.trucks) == ob.trucksNum && len(ob.trucks) != 0 {
 		ob.isComplete = true
+		maxWindowDuration = 0
+		lastAvailableTruckId = 0
 		// ob.printTrucks()
-	}
-}
-
-func (ob *OrderBatch) report() string {
-	var report bytes.Buffer
-	ts := time.Now().UnixNano()
-	sortedTrucks = ob.sortedTrucks()
-	fmt.Println("sort trucks", time.Now().UnixNano()-ts)
-	ts = time.Now().UnixNano()
-	sortedOrders := ob.sortedOrders()
-	fmt.Println("sort orders", time.Now().UnixNano()-ts)
-	ts = time.Now().UnixNano()
-	printTrucksStart()
-	printOrders(sortedOrders)
-	for _, order := range sortedOrders {
-		order.truckId = order.findTruck()
-	}
-	fmt.Println("find trucks for orders", time.Now().UnixNano()-ts)
-	ts = time.Now().UnixNano()
-	for _, order := range ob.orders2 {
-		report.WriteString(strconv.Itoa(order.truckId) + " ")
-	}
-	fmt.Println("add to report", time.Now().UnixNano()-ts)
-	return report.String()
-}
-
-func (ob *OrderBatch) sortedTrucks() []*Truck {
-	slices.SortFunc(ob.trucks, func(a, b *Truck) int {
-		return cmp.Or(
-			cmp.Compare(a.start, b.start),
-			// cmp.Compare(b.freeSpace(), a.freeSpace()),
-			cmp.Compare(a.id, b.id),
-		)
-	})
-	return ob.trucks
-}
-
-func (ob *OrderBatch) sortedOrders() []*Order {
-	slices.SortFunc(ob.orders, func(a, b *Order) int {
-		return cmp.Or(
-			cmp.Compare(a.arrival, b.arrival),
-		)
-	})
-	return ob.orders
-}
-
-type Order struct {
-	id      int
-	arrival int
-	truckId int
-}
-
-func (o *Order) findTruck() int {
-	for _, truck := range sortedTrucks {
-		if truck.canTakeOrder(o.arrival) {
-			return truck.id
-		}
-	}
-	return -1
-}
-
-func newOrder(id int, arrival string) *Order {
-	return &Order{
-		id:      id,
-		arrival: aToI(arrival, "order arrival"),
-	}
-}
-
-type Truck struct {
-	id       int
-	start    int
-	end      int
-	capacity int
-	orders   int
-}
-
-func (t *Truck) canTakeOrder(arrival int) bool {
-	if arrival < t.start {
-		return false
-	}
-	if arrival > t.end {
-		return false
-	}
-	if t.orders >= t.capacity {
-		return false
-	}
-	t.orders++
-	return true
-}
-
-func (t *Truck) freeSpace() int {
-	return t.capacity - t.orders
-}
-
-func newTruck(id int, start, end, capacity string) *Truck {
-	return &Truck{
-		id:       id,
-		start:    aToI(start, "truck start"),
-		end:      aToI(end, "truck end"),
-		capacity: aToI(capacity, "truck capacity"),
 	}
 }
 
@@ -202,14 +118,17 @@ func aToI(a string, message string) int {
 	return i
 }
 
-func (ob *OrderBatch) printTrucks() {
-	slices.SortFunc(ob.trucks, func(a, b *Truck) int {
+func printTrucks(trucks []*Truck) {
+	slices.SortFunc(trucks, func(a, b *Truck) int {
 		return cmp.Or(
 			cmp.Compare(a.id, b.id),
 		)
 	})
-	for _, truck := range ob.trucks {
-		fmt.Printf("%d %d %d %d ||", truck.id, truck.start, truck.end, truck.capacity)
+	for i, truck := range trucks {
+		fmt.Printf("%+v ||", truck)
+		if i > 10 {
+			break
+		}
 	}
 	fmt.Println("")
 }
@@ -217,13 +136,19 @@ func (ob *OrderBatch) printTrucks() {
 func printTrucksStart() {
 	for i, truck := range sortedTrucks {
 		fmt.Printf("%d:%d ||", i, truck.start)
+		if i > 10 {
+			break
+		}
 	}
 	fmt.Println("================")
 }
 
 func printOrders(orders []*Order) {
 	for i, order := range orders {
-		fmt.Printf("order:%d:%d ||", i, order.arrival)
+		fmt.Printf("%+v ||", order)
+		if i > 10 {
+			break
+		}
 	}
 	fmt.Println("================")
 }

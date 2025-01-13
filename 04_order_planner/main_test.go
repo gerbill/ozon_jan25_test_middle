@@ -12,41 +12,40 @@ import (
 )
 
 func TestRun(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
+	testIteration(t, 17)
+	// for i := 1; ; i++ {
+	// 	testIteration(t, i)
+	// }
+}
 
-	for i := 1; ; i++ {
-		file, err := os.Open(fmt.Sprintf("tests/%d", i))
-		if i < 13 {
-			continue
+func testIteration(t *testing.T, i int) {
+	file, err := os.Open(fmt.Sprintf("tests/%d", i))
+
+	if err != nil {
+		if i > 30 {
+			return
 		}
-		if i > 14 {
-			t.Fail()
-			break
-		}
-		if err != nil {
-			if i > 30 {
-				break
-			}
-			continue
-		}
-		t.Run(file.Name(), func(t *testing.T) {
-			in := bufio.NewReader(file)
-			fileName := fmt.Sprintf("tests/%d.a", i)
-			t.Log(">>>>>>", fileName)
-			expected, err := os.ReadFile(fileName)
-			require.Nil(t, err)
-
-			var buffer bytes.Buffer
-			out := bufio.NewWriter(&buffer)
-
-			Run(in, out)
-
-			out.Flush()
-
-			result, err := io.ReadAll(bufio.NewReader(&buffer))
-			require.Nil(t, err)
-
-			require.Equal(t, string(expected), string(result))
-		})
+		return
 	}
+	t.Run(file.Name(), func(t *testing.T) {
+		in := bufio.NewReader(file)
+		fileName := fmt.Sprintf("tests/%d.a", i)
+		t.Log(">>>>>>", fileName)
+		expected, err := os.ReadFile(fileName)
+		require.Nil(t, err)
+
+		var buffer bytes.Buffer
+		out := bufio.NewWriter(&buffer)
+
+		Run(in, out)
+
+		out.Flush()
+
+		result, err := io.ReadAll(bufio.NewReader(&buffer))
+		require.Nil(t, err)
+
+		require.Equal(t, string(expected), string(result))
+		// t.Fail()
+	})
 }
