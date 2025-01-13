@@ -2,8 +2,8 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"cmp"
-	"fmt"
 	"io"
 	"log"
 	"os"
@@ -17,6 +17,40 @@ func main() {
 	out := bufio.NewWriter(os.Stdout)
 	defer out.Flush()
 	Run(in, out)
+}
+
+func Run(in *bufio.Reader, out *bufio.Writer) {
+	lineCounter := 0
+	ob := OrderBatch{}
+	for {
+		lineCounter++
+		line, err := in.ReadString(byte('\n'))
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Fatalf("failed to read line %d. Error: %+v", lineCounter, err)
+		}
+		if line == "" {
+
+			break
+		}
+		if lineCounter == 1 {
+			continue
+		}
+		// l := lineCounter - 2
+		line = line[:len(line)-1]
+		if !ob.isComplete {
+			ob.fill(line)
+		} else {
+			out.WriteString(ob.report() + "\n")
+			ob = OrderBatch{}
+			ob.fill(line)
+		}
+	}
+	if ob.isComplete {
+		out.WriteString(ob.report() + "\n")
+	}
 }
 
 var sortedTrucks []*Truck
@@ -70,43 +104,9 @@ func (ob *OrderBatch) fill(line string) {
 	}
 	if len(ob.trucks) == ob.trucksNum && len(ob.trucks) != 0 {
 		ob.isComplete = true
+		sortedTrucks = []*Truck{}
 		maxWindowDuration = 0
 		lastAvailableTruckId = 0
-		// ob.printTrucks()
-	}
-}
-
-func Run(in *bufio.Reader, out *bufio.Writer) {
-	lineCounter := 0
-	ob := OrderBatch{}
-	for {
-		lineCounter++
-		line, err := in.ReadString(byte('\n'))
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			log.Fatalf("failed to read line %d. Error: %+v", lineCounter, err)
-		}
-		if line == "" {
-
-			break
-		}
-		if lineCounter == 1 {
-			continue
-		}
-		// l := lineCounter - 2
-		line = line[:len(line)-1]
-		if !ob.isComplete {
-			ob.fill(line)
-		} else {
-			out.WriteString(ob.report() + "\n")
-			ob = OrderBatch{}
-			ob.fill(line)
-		}
-	}
-	if ob.isComplete {
-		out.WriteString(ob.report() + "\n")
 	}
 }
 
@@ -118,37 +118,102 @@ func aToI(a string, message string) int {
 	return i
 }
 
-func printTrucks(trucks []*Truck) {
-	slices.SortFunc(trucks, func(a, b *Truck) int {
+func (ob *OrderBatch) report() string {
+	var report bytes.Buffer
+	sortedTrucks = ob.sortedTrucks()
+	sortedOrders := ob.sortedOrders()
+	for _, order := range sortedOrders {
+		order.findTruck()
+	}
+	for _, order := range ob.orders2 {
+		report.WriteString(strconv.Itoa(order.truckId) + " ")
+	}
+	return report.String()
+}
+
+func (ob *OrderBatch) sortedTrucks() []*Truck {
+	slices.SortFunc(ob.trucks, func(a, b *Truck) int {
 		return cmp.Or(
+			cmp.Compare(a.start, b.start),
 			cmp.Compare(a.id, b.id),
 		)
 	})
-	for i, truck := range trucks {
-		fmt.Printf("%+v ||", truck)
-		if i > 10 {
-			break
-		}
-	}
-	fmt.Println("")
+	return ob.trucks
 }
 
-func printTrucksStart() {
-	for i, truck := range sortedTrucks {
-		fmt.Printf("%d:%d ||", i, truck.start)
-		if i > 10 {
-			break
-		}
-	}
-	fmt.Println("================")
+func (ob *OrderBatch) sortedOrders() []*Order {
+	slices.SortFunc(ob.orders, func(a, b *Order) int {
+		return cmp.Or(
+			cmp.Compare(a.arrival, b.arrival),
+		)
+	})
+	return ob.orders
 }
 
-func printOrders(orders []*Order) {
-	for i, order := range orders {
-		fmt.Printf("%+v ||", order)
-		if i > 10 {
+// Order //////////////////////////////////////////////////
+func newOrder(id int, arrival string) *Order {
+	return &Order{
+		id:      id,
+		arrival: aToI(arrival, "order arrival"),
+	}
+}
+
+func (o *Order) findTruck() {
+	offset := lastAvailableTruckId
+	for i, truck := range sortedTrucks[lastAvailableTruckId:] {
+		if truck.start > o.arrival {
 			break
 		}
+		if truck.canTakeOrder(o.arrival) {
+			o.truckId = truck.id
+			return
+		}
+		if truck.start+maxWindowDuration < o.arrival {
+			lastAvailableTruckId = i + offset
+		}
 	}
-	fmt.Println("================")
+	o.truckId = -1
+}
+
+func (o *Order) findMinTruck() int {
+	min := (len(sortedTrucks) - 1) / 2
+	for {
+		switch {
+		case sortedTrucks[min].start <= o.arrival:
+			return sortedTrucks[min].id
+		}
+	}
+}
+
+// Truck //////////////////////////////////////////////////
+func newTruck(id int, start, end, capacity string) *Truck {
+	t := &Truck{
+		id:       id,
+		start:    aToI(start, "truck start"),
+		end:      aToI(end, "truck end"),
+		capacity: aToI(capacity, "truck capacity"),
+	}
+	window := t.end - t.start
+	if window > maxWindowDuration {
+		maxWindowDuration = window
+	}
+	return t
+}
+
+func (t *Truck) canTakeOrder(arrival int) bool {
+	if arrival < t.start {
+		return false
+	}
+	if arrival > t.end {
+		return false
+	}
+	if t.orders >= t.capacity {
+		return false
+	}
+	t.orders++
+	return true
+}
+
+func (t *Truck) freeSpace() int {
+	return t.capacity - t.orders
 }

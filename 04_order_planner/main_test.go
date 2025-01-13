@@ -12,16 +12,15 @@ import (
 )
 
 func TestRun(t *testing.T) {
-	// t.Parallel()
-	testIteration(t, 17)
-	// for i := 1; ; i++ {
-	// 	testIteration(t, i)
-	// }
+	t.Parallel()
+	testIteration(t, 14)
+	for i := 1; i <= 18; i++ {
+		testIteration(t, i)
+	}
 }
 
 func testIteration(t *testing.T, i int) {
 	file, err := os.Open(fmt.Sprintf("tests/%d", i))
-
 	if err != nil {
 		if i > 30 {
 			return
