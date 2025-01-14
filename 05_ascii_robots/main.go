@@ -9,6 +9,7 @@ import (
 )
 
 var robotNames = []string{"A", "B"}
+var wareHouse *WareHouse
 
 func main() {
 	in := bufio.NewReader(os.Stdin)
@@ -20,17 +21,16 @@ func main() {
 func Run(in io.Reader, out io.Writer) {
 	var dataSets, rows, columns int
 	fmt.Fscan(in, &dataSets)
-	fmt.Println(dataSets)
 	for i := 1; i <= dataSets; i++ {
 		fmt.Fscan(in, &rows, &columns)
-		w := newWareHouse(rows, columns)
+		wareHouse = newWareHouse(rows, columns)
 		for r := 0; r < rows; r++ {
-			fmt.Fscan(in, &w.rows[r])
+			fmt.Fscan(in, &wareHouse.rows[r])
 		}
-		w.findRobots()
-		w.pickDestination()
-		w.move()
-		w.report(out)
+		wareHouse.findRobots()
+		wareHouse.pickDestination()
+		wareHouse.move()
+		wareHouse.report(out)
 	}
 
 }
@@ -39,26 +39,31 @@ type WareHouse struct {
 	numRows    int
 	numColumns int
 	rows       []string
+	columns    []string
 	robots     []*Robot
 	result     []string
 }
 
 func newWareHouse(numRows, numColumns int) *WareHouse {
-	return &WareHouse{
+	w := &WareHouse{
 		numRows:    numRows,
 		numColumns: numColumns,
 		rows:       make([]string, numRows),
+		columns:    make([]string, numColumns),
 		result:     make([]string, numRows),
 	}
+	return w
 }
 
 func (w *WareHouse) move() {
-	for i := 0; i < w.numRows; i++ {
-		for _, r := range w.robots {
-			result := r.move(i, w.rows[i])
-			if result != "" {
-				w.result[i] = result
-			}
+	var counter int
+	for !w.robots[0].arrived || !w.robots[1].arrived {
+		for _, robot := range w.robots {
+			robot.move()
+		}
+		counter++
+		if counter > 1000000 {
+			return
 		}
 	}
 }
@@ -78,28 +83,30 @@ func (w *WareHouse) findRobots() {
 func (w *WareHouse) pickDestination() {
 	A := w.robots[0]
 	B := w.robots[1]
-	if A.startY < B.startX {
-		A.destX = 0
-		A.destY = 0
-		A.movingUp = true
-		B.destX = w.numColumns - 1
-		B.destY = w.numRows - 1
-		B.movingUp = false
-	} else {
+	if A.startY*A.startY+A.startX*A.startX > B.startY*B.startY+B.startX*B.startX {
 		A.destX = w.numColumns - 1
 		A.destY = w.numRows - 1
-		A.movingUp = false
 		B.destX = 0
 		B.destY = 0
-		B.movingUp = true
+	} else {
+
+		A.destX = 0
+		A.destY = 0
+		B.destX = w.numColumns - 1
+		B.destY = w.numRows - 1
 	}
-	fmt.Printf("robot %+v\n", A)
-	fmt.Printf("robot %+v\n", B)
-	fmt.Println("==========")
+}
+
+func (w *WareHouse) makeColumns() {
+	for _, row := range w.rows {
+		for j := 0; j < len(row); j++ {
+			w.columns[j] += string(row[j])
+		}
+	}
 }
 
 func (w *WareHouse) report(out io.Writer) {
-	for _, row := range w.result {
+	for _, row := range w.rows {
 		fmt.Fprintln(out, row)
 	}
 }
@@ -107,8 +114,8 @@ func (w *WareHouse) report(out io.Writer) {
 type Robot struct {
 	name                                             string
 	step                                             string
-	movingUp                                         bool
 	startX, startY, currentX, currentY, destX, destY int
+	arrived                                          bool
 }
 
 func newRobot(name string, startX, startY int) *Robot {
@@ -123,19 +130,50 @@ func newRobot(name string, startX, startY int) *Robot {
 	return r
 }
 
-func (r *Robot) move(rowId int, row string) string {
-	l := len(row)
-	if rowId == r.startY && r.startX == r.destX && r.startY == r.destY {
-		return row
+func (r *Robot) move() {
+	if r.currentX == r.destX && r.currentY == r.destY {
+		r.arrived = true
+		return
 	}
-	if r.movingUp && rowId > r.startY {
-		return ""
+	r.moveY()
+}
+
+func (r *Robot) moveX() {
+	var move int
+	if r.currentX < r.destX {
+		move = 1
+	} else if r.currentX > r.destX {
+		move = -1
 	}
-	if rowId == r.destY {
-		if r.movingUp {
-			return strings.Repeat(r.step, r.startX+1) + strings.Repeat(".", l-r.startX)
-		}
-		return strings.Repeat(".", r.startX) + strings.Repeat(r.step, r.startX)
+	if canMove(r.currentX+move, r.currentY) {
+		r.currentX += move
+		replace(r.step, r.currentX, r.currentY)
 	}
-	return row[:r.startX+1] + r.step + row[r.startX+1:]
+}
+
+func (r *Robot) moveY() {
+	var move int
+	if r.currentY < r.destY {
+		move = 1
+	} else if r.currentY > r.destY {
+		move = -1
+	}
+	if canMove(r.currentX, r.currentY+move) && move != 0 {
+		r.currentY += move
+		replace(r.step, r.currentX, r.currentY)
+	} else {
+		r.moveX()
+		replace(r.step, r.currentX, r.currentY)
+	}
+}
+
+func replace(replacement string, x, y int) {
+	wareHouse.rows[y] = wareHouse.rows[y][:x] + replacement + wareHouse.rows[y][x+1:]
+}
+
+func canMove(x, y int) bool {
+	if wareHouse.rows[y][x] != '.' {
+		return false
+	}
+	return true
 }

@@ -13,10 +13,10 @@ import (
 
 func TestRun(t *testing.T) {
 	t.Parallel()
-	testIteration(t, 1)
-	// for i := 1; i <= 18; i++ {
-	// 	testIteration(t, i)
-	// }
+	// testIteration(t, 14)
+	for i := 1; i <= 18; i++ {
+		testIteration(t, i)
+	}
 }
 
 func testIteration(t *testing.T, i int) {
